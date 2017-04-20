@@ -44,19 +44,7 @@ class Yaml extends File implements Driver
             }
         }
 
-        if (isset($mapping['fields'])) {
-            foreach ($mapping['fields'] as $field => $fieldMapping) {
-                if (isset($fieldMapping['gedmo'])) {
-                    if (in_array('versioned', $fieldMapping['gedmo'])) {
-                        if ($meta->isCollectionValuedAssociation($field)) {
-                            throw new InvalidMappingException("Cannot versioned [{$field}] as it is collection in object - {$meta->name}");
-                        }
-                        // fields cannot be overrided and throws mapping exception
-                        $config['versioned'][] = $field;
-                    }
-                }
-            }
-        }
+        $this->inspectFieldsForVersioned($mapping, $config, $meta);
 
         if (isset($mapping['attributeOverride'])) {
             foreach ($mapping['attributeOverride'] as $field => $fieldMapping) {
@@ -100,7 +88,22 @@ class Yaml extends File implements Driver
             }
         }
 
-        if (!$meta->isMappedSuperclass && $config) {
+        if (isset($mapping['embedded'])) {
+            foreach ($mapping['embedded'] as $field => $fieldMapping) {
+                if (isset($fieldMapping['gedmo'])) {
+                    if (in_array('versioned', $fieldMapping['gedmo'])) {
+                        if ($meta->isCollectionValuedAssociation($field)) {
+                            throw new InvalidMappingException("Cannot versioned [{$field}] as it is collection in object - {$meta->name}");
+                        }
+                        // fields cannot be overrided and throws mapping exception
+                        $mapping = $this->_getMapping($fieldMapping['class']);
+                        $this->inspectFieldsForVersioned($mapping, $config, $meta, $field . '.');
+                    }
+                }
+            }
+        }
+
+        if (!$meta->isMappedSuperclass && !$meta->isEmbeddedClass && $config) {
             if (is_array($meta->identifier) && count($meta->identifier) > 1) {
                 throw new InvalidMappingException("Loggable does not support composite identifiers in class - {$meta->name}");
             }
@@ -116,5 +119,28 @@ class Yaml extends File implements Driver
     protected function _loadMappingFile($file)
     {
         return \Symfony\Component\Yaml\Yaml::parse(file_get_contents($file));
+    }
+
+    /**
+     * @param array $mapping
+     * @param array $config
+     * @param object $meta
+     * @param string $fieldPrefix
+     */
+    private function inspectFieldsForVersioned(array $mapping, array &$config, $meta, $fieldPrefix = '')
+    {
+        if (isset($mapping['fields'])) {
+            foreach ($mapping['fields'] as $field => $fieldMapping) {
+                if (isset($fieldMapping['gedmo'])) {
+                    if (in_array('versioned', $fieldMapping['gedmo'])) {
+                        if ($meta->isCollectionValuedAssociation($field)) {
+                            throw new InvalidMappingException("Cannot versioned [{$field}] as it is collection in object - {$meta->name}");
+                        }
+                        // fields cannot be overrided and throws mapping exception
+                        $config['versioned'][] = $fieldPrefix . $field;
+                    }
+                }
+            }
+        }
     }
 }
